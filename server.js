@@ -245,5 +245,5 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`BetFriends rodando em http://localhost:${PORT}`);
+  console.log(`BetOXG rodando em http://localhost:${PORT}`);
 });
