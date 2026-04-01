@@ -12,6 +12,12 @@ const io = new Server(server);
 const db = new Database(process.env.DB_PATH || './data/betfriends.db');
 db.pragma('journal_mode = WAL');
 
+// Drop old tables from previous version if schema doesn't match
+const tableCheck = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='bets'").get();
+if (tableCheck && !tableCheck.sql.includes('question_id')) {
+  db.exec('DROP TABLE IF EXISTS bets; DROP TABLE IF EXISTS matches; DROP TABLE IF EXISTS questions;');
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
