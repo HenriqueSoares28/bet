@@ -1,0 +1,11 @@
+services:
+  betfriends:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - bet_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  bet_data:

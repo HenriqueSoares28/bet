@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BetFriends - Apostas entre Amigos</title>
+<style>
+  :root {
+    --bg: #0f1923;
+    --card: #1a2c38;
+    --accent: #00e701;
+    --accent2: #f5a623;
+    --danger: #ff4757;
+    --text: #e8e8e8;
+    --text2: #8b9baa;
+    --border: #2a3d4e;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* HEADER */
+  header {
+    background: linear-gradient(135deg, #1a2c38 0%, #0f1923 100%);
+    padding: 14px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+  }
+
+  .logo span { color: var(--text); }
+
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .balance {
+    background: #223344;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--accent);
+  }
+
+  .user-name {
+    font-size: 0.8rem;
+    color: var(--text2);
+    cursor: pointer;
+  }
+
+  /* WELCOME SCREEN */
+  .welcome-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 25, 35, 0.97);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+  }
+
+  .welcome-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px 28px;
+    text-align: center;
+    max-width: 360px;
+    width: 90%;
+  }
+
+  .welcome-box h1 {
+    font-size: 2rem;
+    margin-bottom: 6px;
+    color: var(--accent);
+  }
+
+  .welcome-box p {
+    color: var(--text2);
+    margin-bottom: 24px;
+    font-size: 0.9rem;
+  }
+
+  .welcome-box input {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: 10px;
+    border: 2px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .welcome-box input:focus { border-color: var(--accent); }
+
+  .welcome-box button {
+    width: 100%;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    background: var(--accent);
+    color: #0f1923;
+    font-size: 1rem;
+    font-weight: 700;
+    margin-top: 12px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+
+  .welcome-box button:hover { opacity: 0.9; }
+  .welcome-box button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    gap: 0;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tab {
+    flex: 1;
+    min-width: max-content;
+    padding: 12px 16px;
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  /* MAIN */
+  main { padding: 12px; max-width: 600px; margin: 0 auto; }
+
+  /* MATCH CARD */
+  .match-card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+  }
+
+  .match-league {
+    font-size: 0.7rem;
+    color: var(--accent2);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+
+  .match-time {
+    font-size: 0.7rem;
+    color: var(--text2);
+    float: right;
+  }
+
+  .match-teams {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+
+  .team {
+    text-align: center;
+    flex: 1;
+  }
+
+  .team-emoji { font-size: 1.8rem; margin-bottom: 4px; }
+  .team-name { font-size: 0.85rem; font-weight: 600; }
+
+  .vs {
+    color: var(--text2);
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0 8px;
+  }
+
+  .odds-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+
+  .odd-btn {
+    background: #223344;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    padding: 10px 6px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .odd-btn:hover { border-color: var(--accent); }
+  .odd-btn.selected { border-color: var(--accent); background: rgba(0, 231, 1, 0.1); }
+
+  .odd-label {
+    font-size: 0.65rem;
+    color: var(--text2);
+    margin-bottom: 2px;
+  }
+
+  .odd-value {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .odd-value.up { animation: flashGreen 0.4s; }
+  .odd-value.down { animation: flashRed 0.4s; }
+
+  @keyframes flashGreen {
+    0% { color: #00ff88; transform: scale(1.15); }
+    100% { color: var(--accent); transform: scale(1); }
+  }
+
+  @keyframes flashRed {
+    0% { color: var(--danger); transform: scale(1.15); }
+    100% { color: var(--accent); transform: scale(1); }
+  }
+
+  /* BETSLIP */
+  .betslip {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--card);
+    border-top: 2px solid var(--accent);
+    padding: 16px;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+    z-index: 90;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  .betslip.show { transform: translateY(0); }
+
+  .betslip-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .betslip-header h3 { font-size: 0.9rem; }
+
+  .betslip-close {
+    background: none;
+    border: none;
+    color: var(--text2);
+    font-size: 1.2rem;
+    cursor: pointer;
+  }
+
+  .betslip-match {
+    font-size: 0.8rem;
+    color: var(--text2);
+    margin-bottom: 4px;
+  }
+
+  .betslip-pick {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  .betslip-pick span { color: var(--accent); }
+
+  .bet-input-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .bet-input-row input {
+    flex: 1;
+    padding: 12px;
+    border-radius: 8px;
+    border: 2px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 1rem;
+    outline: none;
+  }
+
+  .bet-input-row input:focus { border-color: var(--accent); }
+
+  .quick-values {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .quick-val {
+    flex: 1;
+    padding: 8px;
+    border-radius: 6px;
+    background: #223344;
+    border: none;
+    color: var(--text);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .quick-val:hover { background: #2a4055; }
+
+  .potential-win {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+    color: var(--text2);
+  }
+
+  .potential-win span { color: var(--accent); font-weight: 700; }
+
+  .place-bet-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    background: var(--accent);
+    color: #0f1923;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .place-bet-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* MY BETS TAB */
+  .my-bet {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+    border-left: 3px solid var(--accent2);
+  }
+
+  .my-bet.won { border-left-color: var(--accent); }
+  .my-bet.lost { border-left-color: var(--danger); }
+
+  .my-bet-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  .my-bet-match { font-size: 0.8rem; color: var(--text2); }
+
+  .my-bet-status {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+  }
+
+  .status-pending { background: rgba(245, 166, 35, 0.2); color: var(--accent2); }
+  .status-won { background: rgba(0, 231, 1, 0.2); color: var(--accent); }
+  .status-lost { background: rgba(255, 71, 87, 0.2); color: var(--danger); }
+
+  .my-bet-pick { font-weight: 600; margin-bottom: 4px; }
+  .my-bet-details { font-size: 0.8rem; color: var(--text2); }
+  .my-bet-details span { color: var(--accent); font-weight: 600; }
+
+  /* RANKING */
+  .rank-card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid var(--border);
+  }
+
+  .rank-pos {
+    font-size: 1.2rem;
+    font-weight: 800;
+    min-width: 28px;
+    color: var(--accent2);
+  }
+
+  .rank-pos:first-child { color: var(--accent); }
+
+  .rank-info { flex: 1; }
+  .rank-name { font-weight: 600; font-size: 0.95rem; }
+  .rank-stats { font-size: 0.75rem; color: var(--text2); }
+
+  .rank-balance {
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--accent);
+  }
+
+  .rank-card:nth-child(1) .rank-pos { color: #ffd700; }
+  .rank-card:nth-child(2) .rank-pos { color: #c0c0c0; }
+  .rank-card:nth-child(3) .rank-pos { color: #cd7f32; }
+
+  /* EMPTY STATE */
+  .empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text2);
+  }
+
+  .empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
+  .empty p { font-size: 0.9rem; }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    top: 70px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100px);
+    background: var(--accent);
+    color: #0f1923;
+    padding: 12px 24px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    z-index: 200;
+    transition: transform 0.3s ease;
+    white-space: nowrap;
+  }
+
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* SECTION TITLE */
+  .section-title {
+    font-size: 0.75rem;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 16px 0 10px;
+    font-weight: 600;
+  }
+
+  /* LIVE BADGE */
+  .live-badge {
+    display: inline-block;
+    background: var(--danger);
+    color: white;
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    animation: pulse 1.5s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- WELCOME -->
+<div class="welcome-overlay" id="welcomeScreen">
+  <div class="welcome-box">
+    <h1>BetFriends</h1>
+    <p>Apostas fictícias entre amigos. Sem dinheiro real, só diversão!</p>
+    <input type="text" id="nameInput" placeholder="Seu nome ou apelido" maxlength="20" autocomplete="off">
+    <button id="enterBtn" disabled>Entrar</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- HEADER -->
+<header class="hidden" id="appHeader">
+  <div class="logo">Bet<span>Friends</span></div>
+  <div class="user-info">
+    <div class="balance" id="balanceDisplay">R$ 1.000</div>
+    <div class="user-name" id="userDisplay" title="Clique para sair"></div>
+  </div>
+</header>
+
+<!-- TABS -->
+<div class="tabs hidden" id="tabsBar">
+  <div class="tab active" data-tab="matches">Jogos</div>
+  <div class="tab" data-tab="mybets">Minhas Apostas</div>
+  <div class="tab" data-tab="ranking">Ranking</div>
+</div>
+
+<!-- MAIN -->
+<main class="hidden" id="appMain">
+  <div id="matchesTab"></div>
+  <div id="mybetsTab" class="hidden"></div>
+  <div id="rankingTab" class="hidden"></div>
+</main>
+
+<!-- BETSLIP -->
+<div class="betslip" id="betslip">
+  <div class="betslip-header">
+    <h3>Bilhete de Aposta</h3>
+    <button class="betslip-close" id="closeBetslip">&times;</button>
+  </div>
+  <div class="betslip-match" id="bsMatch"></div>
+  <div class="betslip-pick" id="bsPick"></div>
+  <div class="bet-input-row">
+    <input type="number" id="betAmount" placeholder="Valor da aposta" min="1" step="1">
+  </div>
+  <div class="quick-values">
+    <button class="quick-val" data-val="10">R$10</button>
+    <button class="quick-val" data-val="25">R$25</button>
+    <button class="quick-val" data-val="50">R$50</button>
+    <button class="quick-val" data-val="100">R$100</button>
+    <button class="quick-val" data-val="all">Tudo</button>
+  </div>
+  <div class="potential-win">
+    <span>Retorno potencial:</span>
+    <span id="potentialWin">R$ 0,00</span>
+  </div>
+  <button class="place-bet-btn" id="placeBetBtn" disabled>Apostar</button>
+</div>
+
+<script>
+// ===== DATA =====
+const INITIAL_BALANCE = 1000;
+const STORAGE_KEY = 'betfriends_data';
+
+const MATCHES = [
+  {
+    id: 1, league: 'Brasileirão - Série A', time: 'Ao Vivo',
+    live: true, minute: 34,
+    home: { name: 'Flamengo', emoji: '🔴⚫' },
+    away: { name: 'Palmeiras', emoji: '🟢⚪' },
+    odds: { home: 2.10, draw: 3.25, away: 3.40 }
+  },
+  {
+    id: 2, league: 'Brasileirão - Série A', time: 'Hoje 19:00',
+    live: false,
+    home: { name: 'Corinthians', emoji: '⚫⚪' },
+    away: { name: 'São Paulo', emoji: '🔴⚪' },
+    odds: { home: 2.50, draw: 3.10, away: 2.80 }
+  },
+  {
+    id: 3, league: 'Champions League', time: 'Hoje 16:00',
+    live: false,
+    home: { name: 'Real Madrid', emoji: '⚪🟡' },
+    away: { name: 'Man City', emoji: '🔵⚪' },
+    odds: { home: 1.95, draw: 3.50, away: 3.80 }
+  },
+  {
+    id: 4, league: 'Champions League', time: 'Ao Vivo',
+    live: true, minute: 67,
+    home: { name: 'Barcelona', emoji: '🔵🔴' },
+    away: { name: 'Bayern', emoji: '🔴⚪' },
+    odds: { home: 2.30, draw: 3.40, away: 2.90 }
+  },
+  {
+    id: 5, league: 'Premier League', time: 'Amanhã 13:30',
+    live: false,
+    home: { name: 'Liverpool', emoji: '🔴🔴' },
+    away: { name: 'Arsenal', emoji: '🔴⚪' },
+    odds: { home: 1.80, draw: 3.60, away: 4.20 }
+  },
+  {
+    id: 6, league: 'La Liga', time: 'Amanhã 16:00',
+    live: false,
+    home: { name: 'Atlético', emoji: '🔴⚪' },
+    away: { name: 'Sevilla', emoji: '⚪🔴' },
+    odds: { home: 1.65, draw: 3.70, away: 5.00 }
+  },
+  {
+    id: 7, league: 'Brasileirão - Série A', time: 'Ao Vivo',
+    live: true, minute: 12,
+    home: { name: 'Grêmio', emoji: '🔵⚫' },
+    away: { name: 'Internacional', emoji: '🔴⚪' },
+    odds: { home: 2.40, draw: 3.15, away: 2.95 }
+  },
+  {
+    id: 8, league: 'Serie A Itália', time: 'Hoje 15:45',
+    live: false,
+    home: { name: 'Juventus', emoji: '⚫⚪' },
+    away: { name: 'Milan', emoji: '🔴⚫' },
+    odds: { home: 2.20, draw: 3.30, away: 3.10 }
+  }
+];
+
+// ===== STATE =====
+let state = loadState();
+let selectedBet = null;
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch(e) {}
+  return null;
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function createUser(name) {
+  state = {
+    name: name.trim(),
+    balance: INITIAL_BALANCE,
+    bets: [],
+    createdAt: Date.now()
+  };
+  saveState();
+}
+
+// ===== ODDS ENGINE =====
+function fluctuateOdds() {
+  MATCHES.forEach(m => {
+    ['home', 'draw', 'away'].forEach(key => {
+      const change = (Math.random() - 0.5) * 0.15;
+      const newOdd = Math.max(1.05, m.odds[key] + change);
+      m.odds[key] = Math.round(newOdd * 100) / 100;
+    });
+    if (m.live && m.minute < 90) {
+      m.minute += Math.floor(Math.random() * 2);
+      if (m.minute > 90) m.minute = 90;
+    }
+  });
+  renderMatches();
+}
+
+// ===== RENDERING =====
+function renderMatches() {
+  const container = document.getElementById('matchesTab');
+
+  const liveMatches = MATCHES.filter(m => m.live);
+  const upcoming = MATCHES.filter(m => !m.live);
+
+  let html = '';
+
+  if (liveMatches.length) {
+    html += '<div class="section-title">Ao Vivo</div>';
+    liveMatches.forEach(m => html += matchCardHTML(m));
+  }
+
+  if (upcoming.length) {
+    html += '<div class="section-title">Próximos jogos</div>';
+    upcoming.forEach(m => html += matchCardHTML(m));
+  }
+
+  // Track previous odds for animation
+  const prevOdds = {};
+  container.querySelectorAll('[data-odd-id]').forEach(el => {
+    prevOdds[el.dataset.oddId] = parseFloat(el.textContent);
+  });
+
+  container.innerHTML = html;
+
+  // Animate changed odds
+  container.querySelectorAll('[data-odd-id]').forEach(el => {
+    const id = el.dataset.oddId;
+    const curr = parseFloat(el.textContent);
+    if (prevOdds[id] !== undefined && prevOdds[id] !== curr) {
+      el.classList.add(curr > prevOdds[id] ? 'up' : 'down');
+      setTimeout(() => el.classList.remove('up', 'down'), 400);
+    }
+  });
+
+  // Re-apply selection
+  if (selectedBet) {
+    const sel = container.querySelector(`[data-sel="${selectedBet.matchId}-${selectedBet.pick}"]`);
+    if (sel) sel.classList.add('selected');
+  }
+}
+
+function matchCardHTML(m) {
+  const timeHtml = m.live
+    ? `<span class="live-badge">AO VIVO ${m.minute}'</span>`
+    : `<span class="match-time">${m.time}</span>`;
+
+  return `
+    <div class="match-card">
+      <div class="match-league">${m.league} ${timeHtml}</div>
+      <div class="match-teams">
+        <div class="team">
+          <div class="team-emoji">${m.home.emoji}</div>
+          <div class="team-name">${m.home.name}</div>
+        </div>
+        <div class="vs">VS</div>
+        <div class="team">
+          <div class="team-emoji">${m.away.emoji}</div>
+          <div class="team-name">${m.away.name}</div>
+        </div>
+      </div>
+      <div class="odds-row">
+        <div class="odd-btn" data-sel="${m.id}-home" onclick="selectOdd(${m.id},'home','${m.home.name}',${m.odds.home},'${m.home.name} vs ${m.away.name}')">
+          <div class="odd-label">${m.home.name}</div>
+          <div class="odd-value" data-odd-id="${m.id}-home">${m.odds.home.toFixed(2)}</div>
+        </div>
+        <div class="odd-btn" data-sel="${m.id}-draw" onclick="selectOdd(${m.id},'draw','Empate',${m.odds.draw},'${m.home.name} vs ${m.away.name}')">
+          <div class="odd-label">Empate</div>
+          <div class="odd-value" data-odd-id="${m.id}-draw">${m.odds.draw.toFixed(2)}</div>
+        </div>
+        <div class="odd-btn" data-sel="${m.id}-away" onclick="selectOdd(${m.id},'away','${m.away.name}',${m.odds.away},'${m.home.name} vs ${m.away.name}')">
+          <div class="odd-label">${m.away.name}</div>
+          <div class="odd-value" data-odd-id="${m.id}-away">${m.odds.away.toFixed(2)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderMyBets() {
+  const container = document.getElementById('mybetsTab');
+  if (!state.bets.length) {
+    container.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">🎰</div>
+        <p>Você ainda não fez nenhuma aposta.<br>Escolha um jogo e aposte!</p>
+      </div>`;
+    return;
+  }
+
+  const sorted = [...state.bets].reverse();
+  container.innerHTML = sorted.map(b => {
+    const statusClass = b.status === 'pending' ? 'status-pending' : b.status === 'won' ? 'status-won' : 'status-lost';
+    const statusText = b.status === 'pending' ? 'Pendente' : b.status === 'won' ? 'Ganhou' : 'Perdeu';
+    const cardClass = b.status === 'pending' ? '' : b.status;
+
+    return `
+      <div class="my-bet ${cardClass}">
+        <div class="my-bet-header">
+          <div class="my-bet-match">${b.match}</div>
+          <span class="my-bet-status ${statusClass}">${statusText}</span>
+        </div>
+        <div class="my-bet-pick">${b.pickName} @ <span>${b.odd.toFixed(2)}</span></div>
+        <div class="my-bet-details">
+          Apostou <span>R$ ${b.amount.toFixed(2)}</span> &middot;
+          Retorno <span>R$ ${(b.amount * b.odd).toFixed(2)}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderRanking() {
+  const container = document.getElementById('rankingTab');
+
+  // Fake ranking with user included
+  const fakeUsers = [
+    { name: 'Pedro', balance: 1340, bets: 8 },
+    { name: 'Lucas', balance: 1120, bets: 5 },
+    { name: 'Maria', balance: 980, bets: 12 },
+    { name: 'João', balance: 870, bets: 6 },
+    { name: 'Ana', balance: 750, bets: 9 },
+  ];
+
+  // Add current user
+  const all = [...fakeUsers];
+  const existing = all.findIndex(u => u.name.toLowerCase() === state.name.toLowerCase());
+  if (existing >= 0) {
+    all[existing].balance = state.balance;
+    all[existing].bets = state.bets.length;
+  } else {
+    all.push({ name: state.name, balance: state.balance, bets: state.bets.length });
+  }
+
+  all.sort((a, b) => b.balance - a.balance);
+
+  container.innerHTML = '<div class="section-title">Ranking dos Amigos</div>' +
+    all.map((u, i) => `
+      <div class="rank-card" style="${u.name === state.name ? 'border-color: var(--accent);' : ''}">
+        <div class="rank-pos">${i + 1}°</div>
+        <div class="rank-info">
+          <div class="rank-name">${u.name} ${u.name === state.name ? '(você)' : ''}</div>
+          <div class="rank-stats">${u.bets} apostas</div>
+        </div>
+        <div class="rank-balance">R$ ${u.balance.toFixed(0)}</div>
+      </div>
+    `).join('');
+}
+
+// ===== BETSLIP =====
+function selectOdd(matchId, pick, pickName, odd, matchName) {
+  selectedBet = { matchId, pick, pickName, odd, matchName };
+
+  document.querySelectorAll('.odd-btn').forEach(b => b.classList.remove('selected'));
+  const sel = document.querySelector(`[data-sel="${matchId}-${pick}"]`);
+  if (sel) sel.classList.add('selected');
+
+  document.getElementById('bsMatch').textContent = matchName;
+  document.getElementById('bsPick').innerHTML = `${pickName} @ <span>${odd.toFixed(2)}</span>`;
+  document.getElementById('betAmount').value = '';
+  updatePotentialWin();
+  document.getElementById('betslip').classList.add('show');
+}
+
+function updatePotentialWin() {
+  const amount = parseFloat(document.getElementById('betAmount').value) || 0;
+  const odd = selectedBet ? selectedBet.odd : 0;
+  const win = amount * odd;
+  document.getElementById('potentialWin').textContent = `R$ ${win.toFixed(2)}`;
+  document.getElementById('placeBetBtn').disabled = amount <= 0 || amount > state.balance;
+}
+
+function closeBetslip() {
+  document.getElementById('betslip').classList.remove('show');
+  document.querySelectorAll('.odd-btn').forEach(b => b.classList.remove('selected'));
+  selectedBet = null;
+}
+
+function placeBet() {
+  const amount = parseFloat(document.getElementById('betAmount').value);
+  if (!selectedBet || amount <= 0 || amount > state.balance) return;
+
+  // Get current odd (may have changed)
+  const match = MATCHES.find(m => m.id === selectedBet.matchId);
+  const currentOdd = match.odds[selectedBet.pick];
+
+  state.balance -= amount;
+  state.bets.push({
+    id: Date.now(),
+    matchId: selectedBet.matchId,
+    match: selectedBet.matchName,
+    pick: selectedBet.pick,
+    pickName: selectedBet.pickName,
+    odd: currentOdd,
+    amount: amount,
+    status: 'pending',
+    placedAt: Date.now()
+  });
+
+  saveState();
+  updateBalanceDisplay();
+  closeBetslip();
+  showToast(`Aposta de R$${amount.toFixed(0)} realizada!`);
+
+  // Resolve bet after random time (10-30s)
+  const betId = state.bets[state.bets.length - 1].id;
+  setTimeout(() => resolveBet(betId), 10000 + Math.random() * 20000);
+}
+
+function resolveBet(betId) {
+  const bet = state.bets.find(b => b.id === betId);
+  if (!bet || bet.status !== 'pending') return;
+
+  // 40% chance of winning
+  const won = Math.random() < 0.4;
+  bet.status = won ? 'won' : 'lost';
+
+  if (won) {
+    const winnings = bet.amount * bet.odd;
+    state.balance += winnings;
+    showToast(`Você ganhou R$${winnings.toFixed(0)}! 🎉`);
+  } else {
+    showToast(`Aposta perdida... 😔`);
+  }
+
+  saveState();
+  updateBalanceDisplay();
+  renderMyBets();
+  renderRanking();
+}
+
+// ===== UI UTILS =====
+function updateBalanceDisplay() {
+  document.getElementById('balanceDisplay').textContent = `R$ ${state.balance.toFixed(0)}`;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function showApp() {
+  document.getElementById('welcomeScreen').classList.add('hidden');
+  document.getElementById('appHeader').classList.remove('hidden');
+  document.getElementById('tabsBar').classList.remove('hidden');
+  document.getElementById('appMain').classList.remove('hidden');
+  document.getElementById('userDisplay').textContent = state.name;
+  updateBalanceDisplay();
+  renderMatches();
+  renderMyBets();
+  renderRanking();
+}
+
+// ===== TABS =====
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+
+    const target = tab.dataset.tab;
+    ['matchesTab', 'mybetsTab', 'rankingTab'].forEach(id => {
+      document.getElementById(id).classList.toggle('hidden', id !== target + 'Tab');
+    });
+
+    if (target === 'ranking') renderRanking();
+    if (target === 'mybets') renderMyBets();
+  });
+});
+
+// ===== EVENTS =====
+const nameInput = document.getElementById('nameInput');
+const enterBtn = document.getElementById('enterBtn');
+
+nameInput.addEventListener('input', () => {
+  enterBtn.disabled = nameInput.value.trim().length < 2;
+});
+
+nameInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !enterBtn.disabled) enterBtn.click();
+});
+
+enterBtn.addEventListener('click', () => {
+  createUser(nameInput.value);
+  showApp();
+});
+
+document.getElementById('closeBetslip').addEventListener('click', closeBetslip);
+
+document.getElementById('betAmount').addEventListener('input', updatePotentialWin);
+
+document.querySelectorAll('.quick-val').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const val = btn.dataset.val;
+    document.getElementById('betAmount').value = val === 'all' ? state.balance : val;
+    updatePotentialWin();
+  });
+});
+
+document.getElementById('placeBetBtn').addEventListener('click', placeBet);
+
+document.getElementById('userDisplay').addEventListener('click', () => {
+  if (confirm('Deseja sair e trocar de nome?')) {
+    localStorage.removeItem(STORAGE_KEY);
+    location.reload();
+  }
+});
+
+// ===== INIT =====
+if (state) {
+  showApp();
+}
+
+// Update odds every 3 seconds
+setInterval(fluctuateOdds, 3000);
+
+// Update live match minutes
+setInterval(() => {
+  MATCHES.forEach(m => {
+    if (m.live && m.minute < 90) m.minute++;
+  });
+}, 60000);
+</script>
+</body>
+</html>
