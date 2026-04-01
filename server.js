@@ -8,7 +8,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// --- DB Setup ---
+// --- DB ---
 const db = new Database(process.env.DB_PATH || './data/betfriends.db');
 db.pragma('journal_mode = WAL');
 
@@ -20,67 +20,64 @@ db.exec(`
     created_at INTEGER DEFAULT (strftime('%s','now'))
   );
 
-  CREATE TABLE IF NOT EXISTS matches (
+  CREATE TABLE IF NOT EXISTS questions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    league TEXT NOT NULL,
-    home_name TEXT NOT NULL,
-    home_emoji TEXT NOT NULL,
-    away_name TEXT NOT NULL,
-    away_emoji TEXT NOT NULL,
-    odd_home REAL NOT NULL,
-    odd_draw REAL NOT NULL,
-    odd_away REAL NOT NULL,
-    live INTEGER DEFAULT 0,
-    minute INTEGER DEFAULT 0,
-    time_label TEXT NOT NULL,
+    text TEXT NOT NULL,
+    created_by INTEGER NOT NULL,
     status TEXT DEFAULT 'open',
     result TEXT,
-    created_at INTEGER DEFAULT (strftime('%s','now'))
+    total_yes REAL DEFAULT 0,
+    total_no REAL DEFAULT 0,
+    created_at INTEGER DEFAULT (strftime('%s','now')),
+    resolved_at INTEGER,
+    FOREIGN KEY (created_by) REFERENCES users(id)
   );
 
   CREATE TABLE IF NOT EXISTS bets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
-    match_id INTEGER NOT NULL,
+    question_id INTEGER NOT NULL,
     pick TEXT NOT NULL,
-    pick_name TEXT NOT NULL,
     odd REAL NOT NULL,
     amount REAL NOT NULL,
     status TEXT DEFAULT 'pending',
+    payout REAL DEFAULT 0,
     created_at INTEGER DEFAULT (strftime('%s','now')),
     FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (match_id) REFERENCES matches(id)
+    FOREIGN KEY (question_id) REFERENCES questions(id)
   );
 `);
 
-// Seed matches if empty
-const matchCount = db.prepare('SELECT COUNT(*) as c FROM matches').get().c;
-if (matchCount === 0) {
-  const insert = db.prepare(`
-    INSERT INTO matches (league, home_name, home_emoji, away_name, away_emoji, odd_home, odd_draw, odd_away, live, minute, time_label)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+// --- Helpers ---
+function calcOdds(totalYes, totalNo) {
+  const total = totalYes + totalNo;
+  if (total === 0) return { yes: 2.00, no: 2.00 };
 
-  const seeds = [
-    ['Brasileirão - Série A', 'Flamengo', '🔴⚫', 'Palmeiras', '🟢⚪', 2.10, 3.25, 3.40, 1, 34, 'Ao Vivo'],
-    ['Brasileirão - Série A', 'Corinthians', '⚫⚪', 'São Paulo', '🔴⚪', 2.50, 3.10, 2.80, 0, 0, 'Hoje 19:00'],
-    ['Champions League', 'Real Madrid', '⚪🟡', 'Man City', '🔵⚪', 1.95, 3.50, 3.80, 0, 0, 'Hoje 16:00'],
-    ['Champions League', 'Barcelona', '🔵🔴', 'Bayern', '🔴⚪', 2.30, 3.40, 2.90, 1, 67, 'Ao Vivo'],
-    ['Premier League', 'Liverpool', '🔴🔴', 'Arsenal', '🔴⚪', 1.80, 3.60, 4.20, 0, 0, 'Amanhã 13:30'],
-    ['La Liga', 'Atlético', '🔴⚪', 'Sevilla', '⚪🔴', 1.65, 3.70, 5.00, 0, 0, 'Amanhã 16:00'],
-    ['Brasileirão - Série A', 'Grêmio', '🔵⚫', 'Internacional', '🔴⚪', 2.40, 3.15, 2.95, 1, 12, 'Ao Vivo'],
-    ['Serie A Itália', 'Juventus', '⚫⚪', 'Milan', '🔴⚫', 2.20, 3.30, 3.10, 0, 0, 'Hoje 15:45'],
-  ];
+  const margin = 0.08; // 8% margem da casa
+  const pYes = (totalYes + 1) / (total + 2); // smoothing
+  const pNo = (totalNo + 1) / (total + 2);
 
-  const insertMany = db.transaction((rows) => {
-    for (const r of rows) insert.run(...r);
-  });
-  insertMany(seeds);
+  let oddYes = (1 / pNo) * (1 - margin); // mais gente aposta sim -> odd do sim abaixa
+  let oddNo = (1 / pYes) * (1 - margin);
+
+  oddYes = Math.max(1.10, Math.min(20, Math.round(oddYes * 100) / 100));
+  oddNo = Math.max(1.10, Math.min(20, Math.round(oddNo * 100) / 100));
+
+  return { yes: oddYes, no: oddNo };
 }
 
-// --- Helpers ---
-function getMatches() {
-  return db.prepare("SELECT * FROM matches WHERE status = 'open' ORDER BY live DESC, id ASC").all();
+function getQuestions() {
+  const questions = db.prepare(`
+    SELECT q.*, u.name as creator_name
+    FROM questions q JOIN users u ON q.created_by = u.id
+    ORDER BY q.status = 'open' DESC, q.created_at DESC
+  `).all();
+
+  return questions.map(q => ({
+    ...q,
+    odds: calcOdds(q.total_yes, q.total_no),
+    bet_count: db.prepare('SELECT COUNT(*) as c FROM bets WHERE question_id = ?').get(q.id).c
+  }));
 }
 
 function getRanking() {
@@ -89,8 +86,8 @@ function getRanking() {
 
 function getUserBets(userId) {
   return db.prepare(`
-    SELECT b.*, m.home_name, m.away_name
-    FROM bets b JOIN matches m ON b.match_id = m.id
+    SELECT b.*, q.text as question_text
+    FROM bets b JOIN questions q ON b.question_id = q.id
     WHERE b.user_id = ? ORDER BY b.created_at DESC
   `).all(userId);
 }
@@ -99,68 +96,10 @@ function broadcast(event, data) {
   io.emit(event, data);
 }
 
-// --- Odds fluctuation ---
-function fluctuateOdds() {
-  const matches = db.prepare("SELECT * FROM matches WHERE status = 'open'").all();
-  const update = db.prepare('UPDATE matches SET odd_home=?, odd_draw=?, odd_away=?, minute=? WHERE id=?');
-
-  const doUpdate = db.transaction(() => {
-    for (const m of matches) {
-      let oh = m.odd_home + (Math.random() - 0.5) * 0.12;
-      let od = m.odd_draw + (Math.random() - 0.5) * 0.12;
-      let oa = m.odd_away + (Math.random() - 0.5) * 0.12;
-      oh = Math.max(1.05, Math.round(oh * 100) / 100);
-      od = Math.max(1.05, Math.round(od * 100) / 100);
-      oa = Math.max(1.05, Math.round(oa * 100) / 100);
-      let min = m.minute;
-      if (m.live && min < 90) min += Math.random() < 0.3 ? 1 : 0;
-      update.run(oh, od, oa, min, m.id);
-    }
-  });
-
-  doUpdate();
-  broadcast('matches', getMatches());
-}
-
-setInterval(fluctuateOdds, 4000);
-
-// --- Resolve bets randomly (for fun) ---
-function resolveRandomBets() {
-  const pending = db.prepare("SELECT * FROM bets WHERE status = 'pending' AND created_at < strftime('%s','now') - 15").all();
-
-  for (const bet of pending) {
-    const won = Math.random() < 0.4;
-    const status = won ? 'won' : 'lost';
-
-    db.prepare('UPDATE bets SET status = ? WHERE id = ?').run(status, bet.id);
-
-    if (won) {
-      const winnings = bet.amount * bet.odd;
-      db.prepare('UPDATE users SET balance = balance + ? WHERE id = ?').run(winnings, bet.user_id);
-    }
-
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(bet.user_id);
-    if (user) {
-      io.to('user_' + user.id).emit('bet_resolved', {
-        betId: bet.id,
-        status,
-        won,
-        winnings: won ? bet.amount * bet.odd : 0,
-        newBalance: user.balance
-      });
-    }
-  }
-
-  if (pending.length > 0) {
-    broadcast('ranking', getRanking());
-  }
-}
-
-setInterval(resolveRandomBets, 5000);
-
 // --- Socket.IO ---
 io.on('connection', (socket) => {
-  // Join / create user
+
+  // Join
   socket.on('join', (name, callback) => {
     name = (name || '').trim().substring(0, 20);
     if (name.length < 2) return callback({ error: 'Nome muito curto' });
@@ -176,7 +115,7 @@ io.on('connection', (socket) => {
 
     callback({
       user: { id: user.id, name: user.name, balance: user.balance },
-      matches: getMatches(),
+      questions: getQuestions(),
       bets: getUserBets(user.id),
       ranking: getRanking()
     });
@@ -184,23 +123,44 @@ io.on('connection', (socket) => {
     broadcast('ranking', getRanking());
   });
 
+  // Create question
+  socket.on('create_question', (text, callback) => {
+    if (!socket.userId) return callback({ error: 'Não logado' });
+    text = (text || '').trim();
+    if (text.length < 5) return callback({ error: 'Pergunta muito curta' });
+    if (text.length > 200) return callback({ error: 'Pergunta muito longa' });
+
+    db.prepare('INSERT INTO questions (text, created_by) VALUES (?, ?)').run(text, socket.userId);
+    broadcast('questions', getQuestions());
+    callback({ success: true });
+  });
+
   // Place bet
   socket.on('place_bet', (data, callback) => {
     if (!socket.userId) return callback({ error: 'Não logado' });
 
-    const { matchId, pick, pickName, amount } = data;
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(socket.userId);
-    const match = db.prepare("SELECT * FROM matches WHERE id = ? AND status = 'open'").get(matchId);
+    const { questionId, pick, amount } = data;
+    if (pick !== 'yes' && pick !== 'no') return callback({ error: 'Pick inválido' });
 
-    if (!user || !match) return callback({ error: 'Jogo não encontrado' });
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(socket.userId);
+    const question = db.prepare("SELECT * FROM questions WHERE id = ? AND status = 'open'").get(questionId);
+
+    if (!question) return callback({ error: 'Pergunta não encontrada ou fechada' });
     if (amount <= 0 || amount > user.balance) return callback({ error: 'Saldo insuficiente' });
 
-    const oddKey = pick === 'home' ? 'odd_home' : pick === 'draw' ? 'odd_draw' : 'odd_away';
-    const odd = match[oddKey];
+    const odds = calcOdds(question.total_yes, question.total_no);
+    const odd = pick === 'yes' ? odds.yes : odds.no;
+
+    // Update totals
+    if (pick === 'yes') {
+      db.prepare('UPDATE questions SET total_yes = total_yes + ? WHERE id = ?').run(amount, questionId);
+    } else {
+      db.prepare('UPDATE questions SET total_no = total_no + ? WHERE id = ?').run(amount, questionId);
+    }
 
     db.prepare('UPDATE users SET balance = balance - ? WHERE id = ?').run(amount, user.id);
-    db.prepare('INSERT INTO bets (user_id, match_id, pick, pick_name, odd, amount) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(user.id, matchId, pick, pickName, odd, amount);
+    db.prepare('INSERT INTO bets (user_id, question_id, pick, odd, amount) VALUES (?, ?, ?, ?, ?)')
+      .run(user.id, questionId, pick, odd, amount);
 
     const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
 
@@ -210,24 +170,77 @@ io.on('connection', (socket) => {
       bets: getUserBets(user.id)
     });
 
+    broadcast('questions', getQuestions());
     broadcast('ranking', getRanking());
-    broadcast('recent_bet', { userName: user.name, matchName: `${match.home_name} vs ${match.away_name}`, pickName, amount, odd });
+    broadcast('recent_bet', {
+      userName: user.name,
+      question: question.text,
+      pick: pick === 'yes' ? 'SIM' : 'NÃO',
+      amount, odd
+    });
   });
 
-  // Refresh data
+  // Resolve question (only creator can)
+  socket.on('resolve_question', (data, callback) => {
+    if (!socket.userId) return callback({ error: 'Não logado' });
+
+    const { questionId, result } = data;
+    if (result !== 'yes' && result !== 'no') return callback({ error: 'Resultado inválido' });
+
+    const question = db.prepare("SELECT * FROM questions WHERE id = ? AND status = 'open'").get(questionId);
+    if (!question) return callback({ error: 'Pergunta não encontrada' });
+    if (question.created_by !== socket.userId) return callback({ error: 'Só quem criou pode resolver' });
+
+    // Resolve
+    db.prepare("UPDATE questions SET status = 'resolved', result = ?, resolved_at = strftime('%s','now') WHERE id = ?")
+      .run(result, questionId);
+
+    // Pay winners
+    const winningBets = db.prepare("SELECT * FROM bets WHERE question_id = ? AND pick = ? AND status = 'pending'")
+      .all(questionId, result);
+
+    for (const bet of winningBets) {
+      const payout = bet.amount * bet.odd;
+      db.prepare("UPDATE bets SET status = 'won', payout = ? WHERE id = ?").run(payout, bet.id);
+      db.prepare('UPDATE users SET balance = balance + ? WHERE id = ?').run(payout, bet.user_id);
+
+      const u = db.prepare('SELECT * FROM users WHERE id = ?').get(bet.user_id);
+      io.to('user_' + bet.user_id).emit('bet_resolved', {
+        betId: bet.id, status: 'won', payout, newBalance: u.balance
+      });
+    }
+
+    // Mark losers
+    db.prepare("UPDATE bets SET status = 'lost' WHERE question_id = ? AND pick != ? AND status = 'pending'")
+      .run(questionId, result);
+
+    const losingBets = db.prepare("SELECT DISTINCT user_id FROM bets WHERE question_id = ? AND status = 'lost'")
+      .all(questionId);
+    for (const lb of losingBets) {
+      const u = db.prepare('SELECT * FROM users WHERE id = ?').get(lb.user_id);
+      io.to('user_' + lb.user_id).emit('bet_resolved', {
+        status: 'lost', newBalance: u.balance
+      });
+    }
+
+    broadcast('questions', getQuestions());
+    broadcast('ranking', getRanking());
+    callback({ success: true });
+  });
+
+  // Refresh
   socket.on('get_data', (callback) => {
     if (!socket.userId) return callback({});
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(socket.userId);
     callback({
       user: { id: user.id, name: user.name, balance: user.balance },
-      matches: getMatches(),
+      questions: getQuestions(),
       bets: getUserBets(socket.userId),
       ranking: getRanking()
     });
   });
 });
 
-// --- Static files ---
 app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;
