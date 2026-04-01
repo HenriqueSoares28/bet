@@ -1,6 +1,6 @@
 services:
   betfriends:
-    build: .
+    image: ghcr.io/henriquesoares28/betfriends:latest
     ports:
       - "3000:3000"
     volumes:
